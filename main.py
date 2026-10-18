@@ -1,0 +1,113 @@
+"""Punto de entrada principal del sistema distribuido Aegis-Star.
+
+Ejecuta el servidor central (nave) en el rango 0 y los 8 nodos sensores en los rangos 1 al 8.
+"""
+
+import argparse
+import sys
+from mpi4py import MPI
+
+from src.common.constants import (
+    RANK_TO_SECTOR,
+    SERVER_RANK,
+    TOTAL_PROCESSES,
+)
+from src.sensors.sensor_node import SensorNode
+from src.server.ship_server import ShipServer
+
+
+def parse_arguments() -> argparse.Namespace:
+    """Lee y procesa los parámetros que el usuario escribe en la terminal."""
+    parser = argparse.ArgumentParser(
+        description="Sistema de detección y evasión en estrella (Aegis-Star 8-Sector)"
+    )
+    # Permite fijar cuántos ciclos durará la simulación (por defecto 8)
+    parser.add_argument(
+        "--cycles",
+        type=int,
+        default=8,
+        help="Cantidad de ciclos a ejecutar antes de finalizar (por defecto 8, 0 para indefinido)",
+    )
+    # Permite ajustar el tiempo de espera entre ciclos en segundos
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=1.0,
+        help="Demora en segundos entre ciclos de evaluación (por defecto 1.0)",
+    )
+    # Permite fijar una semilla para que los números pseudoaleatorios sean repetibles
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Semilla compartida para el generador pseudoaleatorio determinista",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    """Función de inicio que revisa qué rol debe cumplir cada proceso según su rango mpi."""
+    # Inicializa el comunicador global de mpi
+    comm = MPI.COMM_WORLD
+
+    # Obtiene el número identificador único de este proceso (del 0 al 8)
+    rank = comm.Get_rank()
+
+    # Obtiene cuántos procesos se lanzaron en total con mpirun
+    size = comm.Get_size()
+
+    # Lee las opciones pasadas por línea de comandos
+    args = parse_arguments()
+
+    # Verificación de seguridad: el sistema requiere exactamente 9 procesos (1 nave + 8 sensores)
+    if size < TOTAL_PROCESSES:
+        # Solo el proceso 0 imprime el mensaje de error para evitar que salgan 8 mensajes repetidos
+        if rank == 0:
+            print(
+                f"Error: se requieren {TOTAL_PROCESSES} procesos mpi (1 servidor central + 8 sensores). "
+                f"Procesos actuales: {size}.\n"
+                f"Ejecución recomendada: mpirun -n 9 --oversubscribe .venv/bin/python main.py",
+                file=sys.stderr,
+            )
+        sys.exit(1)
+
+    # Si se especificó un número mayor a cero, se usa como límite de ciclos
+    max_cycles = args.cycles if args.cycles > 0 else None
+
+    # Rol 1: Si el proceso tiene rango 0, asume el papel de la nave espacial (servidor central)
+    if rank == SERVER_RANK:
+        server = ShipServer(comm=comm, heartbeat_timeout=3.5, enable_display=True)
+        try:
+            # Ejecuta el bucle del centro de mando
+            server.run(max_cycles=max_cycles, cycle_delay=args.delay)
+        except KeyboardInterrupt:
+            # Si el usuario presiona Ctrl+C en la consola, apaga ordenadamente
+            server.shutdown()
+
+    # Rol 2: Si el proceso tiene rango del 1 al 8, asume el papel del sensor asignado a ese rango
+    elif rank in RANK_TO_SECTOR:
+        # Averigua qué sector cardinal o intercardinal le corresponde
+        sector = RANK_TO_SECTOR[rank]
+
+        # Crea la instancia del sensor con sus parámetros
+        sensor = SensorNode(
+            comm=comm,
+            rank=rank,
+            sector=sector,
+            seed=args.seed,
+            scan_interval=0.7,
+            heartbeat_interval=1.8,
+        )
+        try:
+            # Inicia el bucle de escaneo del sensor
+            sensor.run(max_cycles=max_cycles * 3 if max_cycles else None)
+        except KeyboardInterrupt:
+            pass
+
+    # Si hubiera algún proceso sobrante con rango superior a 8, simplemente no hace nada
+    else:
+        pass
+
+
+if __name__ == "__main__":
+    main()
