@@ -1,0 +1,5 @@
+# Dependencias principales para el sistema distribuido Aegis-Star
+mpi4py>=4.0.0
+numpy>=1.26.0
+rich>=13.7.0
+pytest>=8.0.0
