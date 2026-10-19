@@ -4,12 +4,11 @@ Mantiene el estado espacial de detecciones activas alrededor de la nave central,
 permitiendo actualizaciones seguras sin condiciones de carrera.
 """
 
-from typing import Dict, List, Tuple
+from typing import List
 import numpy as np
 
 from src.common.constants import (
     SECTOR_COORDINATES,
-    SHIP_COORDINATES,
     Sector,
 )
 from src.common.protocol import ThreatEvent
@@ -49,11 +48,12 @@ class ThreatMatrix:
         return int(self._grid[row, col])
 
     def count_active_detections(self) -> int:
-        """Suma cuántos 1s activos hay en el radar, ignorando la celda de la nave."""
-        grid_copy = self._grid.copy()
-        # Aseguramos que la casilla del centro (la nave) esté en cero antes de sumar
-        grid_copy[SHIP_COORDINATES] = 0
-        return int(np.sum(grid_copy))
+        """Cuenta cuántos sectores tienen una detección activa (valor 1)."""
+        contador = 0
+        for fila, columna in SECTOR_COORDINATES.values():
+            if self._grid[fila, columna] == 1:
+                contador += 1
+        return contador
 
     def active_sectors(self) -> List[Sector]:
         """Devuelve una lista con los nombres de los sectores que tienen detección activa."""

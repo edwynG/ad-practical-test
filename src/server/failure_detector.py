@@ -51,22 +51,26 @@ class FailureDetector:
         return failed_sectors
 
     def get_covering_sensor(self, sector: Sector) -> Optional[Sector]:
-        """Busca el sensor vecino activo más cercano para cubrir el punto ciego del sensor caído."""
-        # Si el sensor original sigue vivo, no hace falta que nadie lo cubra
+        """Busca el sensor vecino activo para cubrir a un sensor caído."""
+        # Si el sensor original sigue activo, no hace falta que nadie lo cubra
         if self.active_status[sector]:
             return sector
 
-        # Encuentra la posición del sensor en el círculo de 8 sectores
-        idx = PERIMETER_SECTORS.index(sector)
-        perimeter_len = len(PERIMETER_SECTORS)
+        # Posición del sensor en el anillo perimetral de 8 sectores
+        posicion = PERIMETER_SECTORS.index(sector)
+        total = len(PERIMETER_SECTORS)
 
-        # Prueba primero con el vecino inmediato a la derecha (+1) o a la izquierda (-1)
-        for offset in [1, -1, 2, -2]:
-            candidate = PERIMETER_SECTORS[(idx + offset) % perimeter_len]
-            # Si el vecino candidato está funcionando, se le asigna la cobertura
-            if self.active_status[candidate]:
-                self.coverage_assignment[sector] = candidate
-                return candidate
+        # 1. Probar primero con el vecino de la derecha
+        vecino_derecho = PERIMETER_SECTORS[(posicion + 1) % total]
+        if self.active_status[vecino_derecho]:
+            self.coverage_assignment[sector] = vecino_derecho
+            return vecino_derecho
 
-        # Si todos los vecinos estuvieran caídos, no hay nadie para cubrirlo
+        # 2. Si el de la derecha está caído, probar con el vecino de la izquierda
+        vecino_izquierdo = PERIMETER_SECTORS[(posicion - 1) % total]
+        if self.active_status[vecino_izquierdo]:
+            self.coverage_assignment[sector] = vecino_izquierdo
+            return vecino_izquierdo
+
+        # Si ninguno de los dos vecinos directos está disponible
         return None

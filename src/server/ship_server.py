@@ -11,7 +11,6 @@ from mpi4py import MPI
 from src.common.constants import (
     MessageTag,
     SECTOR_TO_RANK,
-    Sector,
 )
 from src.common.protocol import HeartbeatMessage, ThreatEvent
 from src.server.evasion_logic import EvasionEvaluator

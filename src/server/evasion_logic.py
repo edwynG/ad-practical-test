@@ -1,31 +1,30 @@
-"""Lógica de clasificación de amenazas y toma de decisiones de evasión.
+"""Lógica de evaluación de la matriz de amenazas 3x3.
 
-Aplica las reglas descritas en la especificación:
-- Un único 1 aislado: alerta roja por colisión inminente (trayectoria convergente al centro).
-- Dos o más 1 consecutivos y adyacentes: tránsito seguro (trayectoria paralela o tangente).
-- Sin detecciones: seguro / sin amenazas.
-- Casos límite de bordes y ráfagas evaluados mediante el ciclo perimetral.
+Aplica las reglas del proyecto de forma simple y directa:
+- Sin objetos (todo en 0): sin peligro.
+- Un objeto sin vecinos contiguos (aislado): peligro de choque directo contra la nave.
+- Dos o más objetos vecinos contiguos (en fila o curva perimetral): paso seguro de lado.
 """
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Set
+from typing import List
 import numpy as np
 
 from src.common.constants import PERIMETER_SECTORS, SECTOR_COORDINATES, Sector
 
 
 class DecisionType(str, Enum):
-    """Categorías de decisión que puede tomar el sistema de evasión."""
+    """Categorías de decisión de la nave."""
 
-    NO_THREAT = "SIN_AMENAZAS"              # Cuando no hay ningún objeto detectado
-    SAFE_TRANSIT = "TRANSITO_SEGURO"        # Cuando los objetos pasan de lado sin chocar con la nave
-    RED_ALERT = "ALERTA_ROJA_COLISION"      # Cuando un objeto apunta directamente hacia la nave
+    NO_THREAT = "Sin peligro"          # No hay objetos cerca
+    SAFE_TRANSIT = "Paso seguro"        # Los objetos pasan de lado sin chocar
+    RED_ALERT = "Peligro de choque"     # Un objeto viene directo hacia la nave
 
 
 @dataclass
 class EvasionDecision:
-    """Estructura que contiene los resultados completos de la evaluación."""
+    """Estructura simple con el resultado de la decisión tomada."""
 
     decision: DecisionType
     active_sectors: List[Sector]
@@ -36,115 +35,84 @@ class EvasionDecision:
 
 
 class EvasionEvaluator:
-    """Clase encargada de analizar la matriz 3x3 y determinar si hay peligro de colisión."""
+    """Evalúa la cuadrícula 3x3 y decide qué maniobra debe realizar la nave."""
 
     def __init__(self) -> None:
-        """Carga la lista perimetral ordenada de los 8 sectores exteriores."""
-        # El perímetro está ordenado en círculo: [NO, N, NE, E, SE, S, SO, O]
+        """Guarda la lista de los 8 sectores en orden circular horario."""
+        # Orden perimetral: [NO, N, NE, E, SE, S, SO, O]
         self.perimeter = PERIMETER_SECTORS
-        self.perimeter_len = len(PERIMETER_SECTORS)  # Son 8 sectores en total
 
     def evaluate(self, grid: np.ndarray) -> EvasionDecision:
-        """Examina la cuadrícula 3x3 y toma una decisión de vuelo."""
-        # Paso 1: Encontrar todos los sectores que tienen un 1 en la matriz
-        active_sectors: List[Sector] = []
+        """Revisa la matriz y clasifica la situación con lógica simple y directa."""
+        # 1. Buscar cuáles sectores tienen detección activa (valor igual a 1)
+        active_sectors = []
         for sector in self.perimeter:
-            row, col = SECTOR_COORDINATES[sector]
-            # Si el valor de la casilla es 1, se agrega a la lista de detecciones activas
-            if grid[row, col] == 1:
+            fila, columna = SECTOR_COORDINATES[sector]
+            if grid[fila, columna] == 1:
                 active_sectors.append(sector)
 
-        total_active = len(active_sectors)
-
-        # Caso 1 del documento: Cuando no hay ningún sector con valor 1 (matriz en ceros)
-        if total_active == 0:
+        # Caso 1: Si no hay ningún sector con 1, el espacio está despejado
+        if len(active_sectors) == 0:
             return EvasionDecision(
                 decision=DecisionType.NO_THREAT,
                 active_sectors=[],
                 consecutive_groups=[],
                 isolated_sectors=[],
-                explanation="Espacio circundante despejado. Sin detecciones en radar.",
-                action_taken="Mantener curso estándar y velocidad nominal.",
+                explanation="Espacio libre. No se detecta ningún objeto cerca.",
+                action_taken="Seguir la ruta normal sin cambios.",
             )
 
-        # Paso 2: Convertir los sectores activos en sus posiciones numéricas en el círculo (del 0 al 7)
-        active_indices = {self.perimeter.index(s) for s in active_sectors}
-        visited_indices: Set[int] = set()
-        consecutive_groups_indices: List[List[int]] = []
+        # 2. Para cada sector activo, verificar si tiene al menos un vecino contiguo activo
+        total_sectores = len(self.perimeter)
+        sectores_aislados = []
+        sectores_conectados = []
 
-        # Paso 3: Agrupar sectores activos que sean vecinos inmediatos en el anillo perimetral
-        for idx in active_indices:
-            if idx in visited_indices:
-                continue
+        for i in range(total_sectores):
+            sector_actual = self.perimeter[i]
 
-            # Inicia un grupo nuevo para verificar qué vecinos están conectados
-            group = []
-            queue = [idx]
-            visited_indices.add(idx)
+            # Solo evaluamos los sectores que detectaron un objeto
+            if sector_actual in active_sectors:
+                # El vecino anterior y el siguiente en el círculo perimetral
+                vecino_anterior = self.perimeter[(i - 1) % total_sectores]
+                vecino_siguiente = self.perimeter[(i + 1) % total_sectores]
 
-            while queue:
-                curr = queue.pop(0)
-                group.append(curr)
+                # Si alguno de sus vecinos también tiene detección, van juntos
+                if (vecino_anterior in active_sectors) or (vecino_siguiente in active_sectors):
+                    sectores_conectados.append(sector_actual)
+                else:
+                    # Si no tiene ningún vecino activo a los lados, está solitario
+                    sectores_aislados.append(sector_actual)
 
-                # Un sector tiene dos vecinos en el círculo: el anterior y el siguiente
-                # El uso de % self.perimeter_len permite conectar el último sector (O, pos 7) con el primero (NO, pos 0)
-                neighbors = [(curr - 1) % self.perimeter_len, (curr + 1) % self.perimeter_len]
-                for n in neighbors:
-                    # Si el vecino también tiene detección activa y no lo hemos visitado, se suma al grupo
-                    if n in active_indices and n not in visited_indices:
-                        visited_indices.add(n)
-                        queue.append(n)
-
-            # Guarda el grupo ordenado
-            consecutive_groups_indices.append(sorted(group))
-
-        # Paso 4: Separar los grupos en dos categorías: consecutivos (2 o más) y aislados (exactamente 1)
-        consecutive_groups: List[List[Sector]] = []
-        isolated_sectors: List[Sector] = []
-
-        for grp in consecutive_groups_indices:
-            sector_grp = [self.perimeter[i] for i in grp]
-            if len(grp) >= 2:
-                # Si hay 2 o más sectores contiguos encendidos, es una trayectoria tangencial continua
-                consecutive_groups.append(sector_grp)
-            else:
-                # Si está solo, significa que es una amenaza directa hacia el centro
-                isolated_sectors.append(sector_grp[0])
-
-        # Caso 2 del documento: Si hay al menos un sector aislado con un 1
-        # Esto significa que el meteorito no pasa de lado, sino que avanza directamente a la nave
-        if isolated_sectors:
-            sectors_str = ", ".join(s.value for s in isolated_sectors)
+        # Caso 2: Si hay al menos un sector aislado, apunta directo a la nave (alerta)
+        if len(sectores_aislados) > 0:
+            nombres = ", ".join(s.value for s in sectores_aislados)
             return EvasionDecision(
                 decision=DecisionType.RED_ALERT,
                 active_sectors=active_sectors,
-                consecutive_groups=consecutive_groups,
-                isolated_sectors=isolated_sectors,
-                explanation=f"Detección aislada en {sectors_str} indicando vector de impacto directo.",
-                action_taken="Activar escudos reflectores y ejecutar propulsores de evasión inmediata.",
+                consecutive_groups=[sectores_conectados] if sectores_conectados else [],
+                isolated_sectors=sectores_aislados,
+                explanation=f"Se detectó un objeto solitario en {nombres} que viene directo hacia la nave.",
+                action_taken="Mover la nave para esquivarlo y activar escudos.",
             )
 
-        # Caso 3 del documento: Dos o más detecciones adyacentes continuas sin ninguna amenaza aislada
-        # El objeto solo roza los radares exteriores en una trayectoria paralela o tangente
-        if consecutive_groups and not isolated_sectors:
-            groups_desc = "; ".join(
-                f"[{', '.join(s.value for s in g)}]" for g in consecutive_groups
-            )
+        # Caso 3: Dos o más sectores contiguos y ninguno aislado (tránsito seguro de lado)
+        if len(sectores_conectados) >= 2 and len(sectores_aislados) == 0:
+            nombres = ", ".join(s.value for s in sectores_conectados)
             return EvasionDecision(
                 decision=DecisionType.SAFE_TRANSIT,
                 active_sectors=active_sectors,
-                consecutive_groups=consecutive_groups,
+                consecutive_groups=[sectores_conectados],
                 isolated_sectors=[],
-                explanation=f"Trayectoria tangencial/paralela confirmada en secuencia de paso {groups_desc}.",
-                action_taken="Registrar tránsito seguro de meteorito. Mantener rumbo sin alterar propulsión.",
+                explanation=f"Los objetos van pasando de lado por los sectores [{nombres}] sin chocar.",
+                action_taken="Mantener el rumbo normal. El paso no representa peligro.",
             )
 
-        # Caso de seguridad por precaución si ocurre algún patrón inesperado
+        # Por precaución si ocurre alguna combinación inesperada
         return EvasionDecision(
             decision=DecisionType.RED_ALERT,
             active_sectors=active_sectors,
             consecutive_groups=[],
             isolated_sectors=active_sectors,
-            explanation="Patrón anómalo no clasificado de forma segura. Precaución máxima.",
-            action_taken="Modo defensivo preventivo activado.",
+            explanation="Movimiento dudoso alrededor de la nave.",
+            action_taken="Mantener escudos listos por precaución.",
         )
