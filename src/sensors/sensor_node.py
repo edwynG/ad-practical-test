@@ -56,10 +56,15 @@ class SensorNode:
         chance = self.prng.next_float()
 
         # Si el valor supera 0.65 se considera detección positiva (1), de lo contrario 0
-        detected = 1 if chance > 0.65 else 0
-
-        # Simula una estimación de trayectoria para enviar como información adicional
-        hint = "colisión directa" if detected and self.prng.next_float() > 0.5 else "tránsito perimetral"
+        if chance > 0.65:
+            detected = 1
+            if self.prng.next_float() > 0.5:
+                hint = "colisión directa"
+            else:
+                hint = "tránsito perimetral"
+        else:
+            detected = 0
+            hint = "despejado"
 
         # Construye el evento con la información del radar
         return ThreatEvent.create(
