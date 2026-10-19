@@ -89,6 +89,7 @@ def main() -> None:
 
     # Rol 1: Si el proceso tiene rango 0, asume el papel de la nave espacial (servidor central)
     if rank == SERVER_RANK:
+        # Tiempo de espera máximo sin latidos antes de declarar caído a un sensor
         timeout = max(1.5, args.delay * 1.5)
         server = ShipServer(comm=comm, heartbeat_timeout=timeout, enable_display=True)
         try:

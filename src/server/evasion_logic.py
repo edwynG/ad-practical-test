@@ -72,7 +72,7 @@ class EvasionEvaluator:
 
             # Solo evaluamos los sectores que detectaron un objeto
             if sector_actual in active_sectors:
-                # El vecino anterior y el siguiente en el círculo perimetral
+                # Vecinos anterior y siguiente con módulo circular (conecta los extremos NO y O)
                 vecino_anterior = self.perimeter[(i - 1) % total_sectores]
                 vecino_siguiente = self.perimeter[(i + 1) % total_sectores]
 

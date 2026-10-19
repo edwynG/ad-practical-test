@@ -70,36 +70,45 @@ class ShipServer:
                     # Revisa si algún sector huérfano (que era zona ciega) ahora puede ser cubierto
                     self.failure_detector.reassign_orphaned_sectors()
 
-                    # Envía orden de reconfiguración al nodo recuperado para reconfirmar su área de cobertura
+                    # Obtiene el rango MPI del sensor que revivió
                     rec_rank = SECTOR_TO_RANK[recovered_sec]
+                    # Consulta qué sectores le toca vigilar ahora
                     assigned_rec = tuple(
                         s for s, cov in self.failure_detector.coverage_assignment.items()
                         if cov == recovered_sec
                     )
+                    # Prepara el mensaje con su área de cobertura
                     reconfig_rec = ReconfigMessage.create(
                         target_rank=rec_rank,
                         assigned_sectors=assigned_rec,
                     )
                     try:
+                        # Envía la orden de cobertura al sensor por MPI
                         self.comm.send(reconfig_rec, dest=rec_rank, tag=MessageTag.RECONFIG)
                     except Exception:
                         pass
 
-                # Si el sensor revivió, notifica al antiguo sustituto para que libere la zona delegada
+                # Si había un sensor vecino cubriendo esta zona, le avisa que ya no hace falta
                 if released_substitute:
+                    # Rango MPI del sensor sustituto
                     sub_rank = SECTOR_TO_RANK[released_substitute]
+                    # Sectores que le quedan tras devolver la zona prestada
                     assigned = tuple(
                         s for s, cov in self.failure_detector.coverage_assignment.items()
                         if cov == released_substitute
                     )
+                    # Prepara el mensaje para liberar la guardia
                     reconfig = ReconfigMessage.create(
                         target_rank=sub_rank,
                         assigned_sectors=assigned,
                     )
                     try:
+                        # Notifica al sustituto para que solo vigile lo suyo
                         self.comm.send(reconfig, dest=sub_rank, tag=MessageTag.RECONFIG)
                     except Exception:
                         pass
+
+                # Incrementa el contador de mensajes recibidos en este ciclo
                 messages_processed += 1
 
             # Caso C: Cualquier otro mensaje que pudiera llegar
@@ -127,23 +136,28 @@ class ShipServer:
                         _ = self.failure_detector.get_covering_sensor(failed)
                     self.failure_detector.reassign_orphaned_sectors()
 
-                    # Envía las órdenes de reconfiguración a los sensores activos encargados
+                    # Filtra qué sensores activos deben asumir la vigilancia de sectores caídos
                     covered_targets = set()
                     for s, cov in self.failure_detector.coverage_assignment.items():
                         if cov and self.failure_detector.active_status.get(cov, False):
                             covered_targets.add(cov)
 
+                    # Le avisa a cada sensor activo qué sectores adicionales debe escanear
                     for cov_sec in covered_targets:
+                        # Rango MPI del sensor sustituto
                         covering_rank = SECTOR_TO_RANK[cov_sec]
+                        # Tupla con todos los sectores a su cargo (el suyo más el prestado)
                         assigned = tuple(
                             s for s, c in self.failure_detector.coverage_assignment.items()
                             if c == cov_sec
                         )
+                        # Prepara la orden de reconfiguración
                         reconfig = ReconfigMessage.create(
                             target_rank=covering_rank,
                             assigned_sectors=assigned,
                         )
                         try:
+                            # Envía la nueva orden de vigilancia por MPI
                             self.comm.send(reconfig, dest=covering_rank, tag=MessageTag.RECONFIG)
                         except Exception:
                             pass
