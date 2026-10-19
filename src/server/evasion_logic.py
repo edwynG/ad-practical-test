@@ -86,12 +86,21 @@ class EvasionEvaluator:
         # Caso 2: Si hay al menos un sector aislado, apunta directo a la nave (alerta)
         if len(sectores_aislados) > 0:
             nombres = ", ".join(s.value for s in sectores_aislados)
+            if sectores_conectados:
+                nombres_conn = ", ".join(s.value for s in sectores_conectados)
+                detalles = (
+                    f"Peligro: objeto solitario en {nombres} hacia la nave. "
+                    f"Tránsito lateral seguro en sectores contiguos {nombres_conn}."
+                )
+            else:
+                detalles = f"Se detectó un objeto solitario en {nombres} que viene directo hacia la nave."
+
             return EvasionDecision(
                 decision=DecisionType.RED_ALERT,
                 active_sectors=active_sectors,
                 consecutive_groups=[sectores_conectados] if sectores_conectados else [],
                 isolated_sectors=sectores_aislados,
-                explanation=f"Se detectó un objeto solitario en {nombres} que viene directo hacia la nave.",
+                explanation=detalles,
                 action_taken="Mover la nave para esquivarlo y activar escudos.",
             )
 

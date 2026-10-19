@@ -72,8 +72,8 @@ class ConsoleDisplay:
                     if is_blind:
                         row_cells.append(f"[bold red on grey15] {lbl}: ? [/]")
                     elif val == 1:
-                        # Si es colisión se pinta en rojo brillante, si es tránsito seguro en verde
-                        if decision.decision == DecisionType.RED_ALERT:
+                        # Si es un sector aislado es colisión (rojo); si tiene vecinos contiguos es paso seguro (verde)
+                        if sec in decision.isolated_sectors:
                             style = "bold white on red"
                         else:
                             style = "bold black on green"
