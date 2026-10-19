@@ -18,7 +18,7 @@ class SharedSeedPRNG:
 
     def __init__(
         self,
-        seed: int = 42,
+        seed: int = 30326271,
         multiplier: int = DEFAULT_MULTIPLIER,
         increment: int = DEFAULT_INCREMENT,
         modulus: int = DEFAULT_MODULUS,
