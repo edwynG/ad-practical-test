@@ -61,6 +61,30 @@ class ShipServer:
                 heartbeat: HeartbeatMessage = self.comm.recv(source=source, tag=tag)
                 # Registra que el sensor sigue con vida
                 released_substitute = self.failure_detector.register_heartbeat(heartbeat)
+
+                # Si el sensor acaba de revivir (estaba caído y retornó a la vida):
+                if self.failure_detector.just_recovered:
+                    recovered_sec = self.failure_detector.just_recovered
+                    self.failure_detector.just_recovered = None
+
+                    # Revisa si algún sector huérfano (que era zona ciega) ahora puede ser cubierto
+                    self.failure_detector.reassign_orphaned_sectors()
+
+                    # Envía orden de reconfiguración al nodo recuperado para reconfirmar su área de cobertura
+                    rec_rank = SECTOR_TO_RANK[recovered_sec]
+                    assigned_rec = tuple(
+                        s for s, cov in self.failure_detector.coverage_assignment.items()
+                        if cov == recovered_sec
+                    )
+                    reconfig_rec = ReconfigMessage.create(
+                        target_rank=rec_rank,
+                        assigned_sectors=assigned_rec,
+                    )
+                    try:
+                        self.comm.send(reconfig_rec, dest=rec_rank, tag=MessageTag.RECONFIG)
+                    except Exception:
+                        pass
+
                 # Si el sensor revivió, notifica al antiguo sustituto para que libere la zona delegada
                 if released_substitute:
                     sub_rank = SECTOR_TO_RANK[released_substitute]
@@ -141,7 +165,10 @@ class ShipServer:
                         sensor_status=self.failure_detector.active_status,
                         cycle_number=self.cycle_count,
                         coverage_assignment=self.failure_detector.coverage_assignment,
+                        recently_recovered=list(self.failure_detector.recently_recovered),
                     )
+                    # Limpia la lista de reactivaciones para que no se repitan en ciclos futuros
+                    self.failure_detector.recently_recovered.clear()
 
                 # Si se alcanzó el número máximo de ciclos solicitado, salimos del bucle
                 if max_cycles is not None and self.cycle_count >= max_cycles:

@@ -116,4 +116,30 @@ def test_recovered_sensor_restores_assignment() -> None:
     # S vuelve a vigilarse a sí mismo
     assert detector.coverage_assignment[Sector.S] == Sector.S
     assert detector.active_status[Sector.S] is True
+    assert detector.just_recovered == Sector.S
+    assert Sector.S in detector.recently_recovered
+
+
+def test_revived_sensor_rescues_blind_neighbor() -> None:
+    """Verifica que al revivir un sensor, pueda adoptar a un vecino huérfano sin cobertura."""
+    detector = FailureDetector(timeout_seconds=1.0, startup_grace_period=0.0)
+
+    # Caen S, SO y SE -> S queda en zona ciega (None)
+    detector.active_status[Sector.S] = False
+    detector.active_status[Sector.SO] = False
+    detector.active_status[Sector.SE] = False
+
+    _ = detector.get_covering_sensor(Sector.S)
+    assert detector.coverage_assignment[Sector.S] is None  # Zona ciega
+
+    # Ahora SE revive
+    msg = HeartbeatMessage.create(sector=Sector.SE, rank=8)
+    _ = detector.register_heartbeat(msg)
+    assert detector.active_status[Sector.SE] is True
+
+    # Al reasignar huérfanos, S encuentra al vecino SE recién revivido
+    reassigned = detector.reassign_orphaned_sectors()
+    assert reassigned[Sector.S] == Sector.SE
+    assert detector.coverage_assignment[Sector.S] == Sector.SE
+
 

@@ -21,18 +21,22 @@ class SensorNode:
         comm: MPI.Comm,
         rank: int,
         sector: Sector,
-        seed: int = 42,
+        seed: int = 30326271,
         scan_interval: float = 0.8,
         heartbeat_interval: float = 2.0,
-        fail_at_cycle: Optional[int] = None,
+        failure_prob: float = 0.05,
+        recovery_prob: float = 0.40,
+        min_offline_cycles: int = 3,
     ) -> None:
-        """Configura los parámetros iniciales de conexión y escaneo del sensor."""
+        """Configura los parámetros iniciales de conexión, escaneo y modelo probabilístico de fallas."""
         self.comm = comm                          # Canal de comunicación mpi
         self.rank = rank                          # Número de proceso de este sensor (del 1 al 8)
         self.sector = sector                      # Nombre del sector asignado (ejemplo: N, SO, etc.)
         self.scan_interval = scan_interval        # Segundos de espera entre cada lectura de radar
         self.heartbeat_interval = heartbeat_interval  # Segundos de espera entre cada latido de vida
-        self.fail_at_cycle = fail_at_cycle        # Ciclo a partir del cual el sensor simulará su caída
+        self.failure_prob = failure_prob          # Probabilidad de falla por ciclo (modelo probabilístico)
+        self.recovery_prob = recovery_prob        # Probabilidad de recuperación por ciclo
+        self.min_offline_cycles = min_offline_cycles  # Ciclos mínimos caído para garantizar expiración de timeout
 
         # Crea el generador determinista personalizando la semilla con el rango del nodo
         # De este modo cada sensor tiene su propia secuencia única y reproducible
@@ -42,6 +46,10 @@ class SensorNode:
         self.step_id = 0                          # Contador de pasos temporales
         self.running = False                      # Bandera para saber si el bucle sigue activo
         self.covered_sectors = [sector]           # Lista de sectores que vigila actualmente
+
+        # Estado del modelo probabilístico de fallas y recuperaciones
+        self.is_failed = False
+        self.offline_cycles_count = 0
 
     def send_heartbeat(self) -> None:
         """Empaqueta y envía un latido hacia la nave (rango 0) para indicar que sigue activo."""
@@ -79,10 +87,38 @@ class SensorNode:
             trajectory_hint=hint,
         )
 
+    def _is_sensor_offline(self) -> bool:
+        """Modela las fallas y recuperaciones probabilísticas del sensor.
+
+        Retorna True si el sensor se encuentra actualmente caído (en silencio),
+        o False si está operativo y debe continuar con su escaneo de radar normal.
+        """
+        if self.is_failed:
+            self.offline_cycles_count += 1
+            # Si cumplió el tiempo mínimo caído, evalúa con el PRNG si vuelve a la vida
+            if (
+                self.offline_cycles_count >= self.min_offline_cycles
+                and self.prng.next_float() < self.recovery_prob
+            ):
+                self.is_failed = False
+                self.offline_cycles_count = 0
+                # Al revivir, emite inmediatamente un latido para avisar a la nave que retomó operaciones
+                self.send_heartbeat()
+                self.last_heartbeat = time.time()
+                return False
+            return True
+        else:
+            # Si está activo, evalúa probabilísticamente con el PRNG si sufre una caída transitoria
+            if self.failure_prob > 0.0 and self.prng.next_float() < self.failure_prob:
+                self.is_failed = True
+                self.offline_cycles_count = 0
+                return True
+            return False
+
     def run(self, max_cycles: Optional[int] = None) -> None:
         """Bucle principal de trabajo del nodo sensor."""
         self.running = True
-        last_heartbeat = 0.0
+        self.last_heartbeat = 0.0
         cycles = 0
 
         while self.running:
@@ -92,26 +128,27 @@ class SensorNode:
                 self.running = False
                 break
 
-            # 2. Si este sensor está programado para fallar y alcanzó el ciclo indicado
-            if self.fail_at_cycle is not None and cycles >= self.fail_at_cycle:
-                # El sensor simula una falla guardando silencio: no emite latidos ni lecturas.
-                # Permanece en espera no bloqueante hasta que la nave ordene la terminación.
-                time.sleep(0.3)
-                continue
-
-            # 3. Revisa si la nave le asignó sectores adicionales por tolerancia a fallas
-            if self.comm.Iprobe(source=SERVER_RANK, tag=MessageTag.RECONFIGURE):
+            # 2. Revisa si la nave le asignó o retiró sectores por reconfiguración dinámica
+            while self.comm.Iprobe(source=SERVER_RANK, tag=MessageTag.RECONFIGURE):
                 reconfig_msg: ReconfigMessage = self.comm.recv(
                     source=SERVER_RANK, tag=MessageTag.RECONFIGURE
                 )
                 self.covered_sectors = list(reconfig_msg.assigned_sectors)
 
+            # 3. Modelo probabilístico de fallas (Comentar este bloque 'if' para desactivar fallas por completo)
+            if self._is_sensor_offline():
+                time.sleep(self.scan_interval)
+                cycles += 1
+                if max_cycles is not None and cycles >= max_cycles:
+                    break
+                continue
+
             now = time.time()
 
             # 4. Si ya pasó el tiempo estipulado, envía un latido a la nave
-            if now - last_heartbeat >= self.heartbeat_interval:
+            if now - self.last_heartbeat >= self.heartbeat_interval:
                 self.send_heartbeat()
-                last_heartbeat = now
+                self.last_heartbeat = now
 
             # 5. Realiza la lectura del radar para cada sector bajo su vigilancia y envía los datos
             for sec in self.covered_sectors:

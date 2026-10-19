@@ -29,6 +29,10 @@ class FailureDetector:
         # Registro de qué sensor se encarga de vigilar cada sector (puede ser None si no hay sustituto)
         self.coverage_assignment: Dict[Sector, Optional[Sector]] = {s: s for s in Sector}
 
+        # Rastreo de reactivación de sensores tras una caída
+        self.just_recovered: Optional[Sector] = None
+        self.recently_recovered: List[Sector] = []
+
     def register_heartbeat(self, message: HeartbeatMessage) -> Optional[Sector]:
         """Actualiza el reloj cada vez que llega un latido nuevo de un sensor.
 
@@ -45,6 +49,9 @@ class FailureDetector:
         if was_dead:
             # El sensor recuperado retoma el control exclusivo de su propia zona
             self.coverage_assignment[message.sector] = message.sector
+            self.just_recovered = message.sector
+            if message.sector not in self.recently_recovered:
+                self.recently_recovered.append(message.sector)
             if old_covering and old_covering != message.sector:
                 return old_covering
         return None

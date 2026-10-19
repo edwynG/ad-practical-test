@@ -117,23 +117,23 @@ El archivo `main.py` acepta parámetros para ajustar el comportamiento de la sim
 | `--cycles` | `8` | Número de ciclos de escaneo que realizará la nave antes de apagarse (usar `0` para ejecución continua). |
 | `--delay` | `1.0` | Tiempo de pausa en segundos entre cada evaluación de ciclo en la nave central. |
 | `--seed` | `42` | Semilla inicial para el generador pseudoaleatorio determinista (PRNG). |
-| `--fail-sensor` | `None` | Simula la caída de un sensor específico para evaluar tolerancia a fallas (`NO`, `N`, `NE`, `O`, `E`, `SO`, `S`, `SE`). |
-| `--fail-at` | `3` | Ciclo en el que ocurrirá la desconexión del sensor indicado. |
+| `--failure-prob` | `0.05` | Probabilidad de fallo transitorio por ciclo en cada sensor (modelo probabilístico). |
+| `--recovery-prob` | `0.40` | Probabilidad de recuperación de un sensor caído tras cumplir el período mínimo. |
 
 Ejemplos de ejecución personalizada:
 
 ```bash
-# Ejecutar 12 ciclos con una pausa de 0.8 segundos entre actualizaciones
+# Ejecución estándar con modelo probabilístico de fallas y recuperaciones
 mpirun -n 9 --oversubscribe .venv/bin/python main.py --cycles 12 --delay 0.8
 
-# Probar tolerancia a fallas: simular la caída del sensor Sur (S) en el ciclo 3
-mpirun -n 9 --oversubscribe .venv/bin/python main.py --fail-sensor S --fail-at 3 --cycles 6
+# Ajustar mayor probabilidad de fallas para evaluar tolerancia en red inestable
+mpirun -n 9 --oversubscribe .venv/bin/python main.py --cycles 15 --failure-prob 0.12 --delay 0.6
 
-# Ejecutar con una semilla pseudoaleatoria específica para reproducir un escenario
-mpirun -n 9 --oversubscribe .venv/bin/python main.py --cycles 10 --seed 98765
+# Ejecutar sin fallas simuladas (red 100% estable)
+mpirun -n 9 --oversubscribe .venv/bin/python main.py --cycles 10 --failure-prob 0.0
 
 # Ejecutar de forma indefinida hasta presionar Ctrl+C
-mpirun -n 9 --oversubscribe .venv/bin/python main.py --cycles 0 --delay 1.2
+mpirun -n 9 --oversubscribe .venv/bin/python main.py --cycles 0 --delay 1.0
 ```
 
 ---
@@ -262,8 +262,8 @@ El diseño de este sistema distribuido toma como base los conceptos expuestos en
 2. **Generación determinista y reproducible con semilla compartida**:
    - Para evaluar y comparar de forma justa el comportamiento de múltiples nodos en un entorno espacial sin recurrir a transmisión intensiva de datos de entorno, se aplica un generador congruencial lineal con semilla compartida que reproduce exactamente las mismas condiciones en cada nodo según su rango.
 
-3. **Tolerancia a fallas mediante latidos de vida (*heartbeats*)**:
-   - Cada nodo sensor emite un mensaje periódico de latido hacia la nave central. Si transcurre un período de tiempo superior al umbral establecido (`heartbeat_timeout`) sin recibir señal de un sensor, el detector de fallas lo cataloga como desconectado y activa una reconfiguración dinámica de cobertura, asignando a los sensores vecinos activos la vigilancia del sector huérfano.
+3. **Tolerancia a fallas mediante latidos (*heartbeats*) y modelo probabilístico**:
+   - Cada nodo sensor emite un mensaje periódico de latido hacia la nave central. Las fallas se modelan como un temporizador de desconexión (*timeout*) en la nave y con un modelo probabilístico en los nodos sensores. Si transcurre un tiempo superior a `heartbeat_timeout` sin señal, el detector cataloga al sensor como caído y reasigna dinámicamente el sector huérfano a su vecino inmediato activo. Si el sensor caído revive, emite un nuevo latido, la nave le restituye su zona y le notifica al sustituto para que libere la carga ("retomar el enlace").
 
 ## Flujo de ejecución y verificación del sistema
 

@@ -42,20 +42,18 @@ def parse_arguments() -> argparse.Namespace:
         default=42,
         help="Semilla compartida para el generador pseudoaleatorio determinista",
     )
-    # Permite simular la caída de un sensor para probar tolerancia a fallas
+    # Modelo probabilístico de fallas y recuperaciones 
     parser.add_argument(
-        "--fail-sensor",
-        type=lambda s: s.strip().upper(),
-        default=None,
-        choices=["NO", "N", "NE", "O", "E", "SO", "S", "SE"],
-        help="Sector del sensor que fallará para simular tolerancia a fallas (ejemplo: S, N, O)",
+        "--failure-prob",
+        type=float,
+        default=0.05,
+        help="Probabilidad de desconexión transitoria por ciclo en cada sensor (por defecto 0.05)",
     )
-    # Permite indicar en qué ciclo debe fallar el sensor indicado
     parser.add_argument(
-        "--fail-at",
-        type=int,
-        default=3,
-        help="Número de ciclo en el que ocurrirá la desconexión del sensor indicado (por defecto 3)",
+        "--recovery-prob",
+        type=float,
+        default=0.40,
+        help="Probabilidad de recuperación tras cumplir el período mínimo caído (por defecto 0.40)",
     )
     return parser.parse_args()
 
@@ -105,17 +103,10 @@ def main() -> None:
         # Averigua qué sector cardinal o intercardinal le corresponde
         sector = RANK_TO_SECTOR[rank]
 
-        # Determina si a este sensor en particular le corresponde simular una falla
-        fail_at_cycle = (
-            args.fail_at
-            if args.fail_sensor and args.fail_sensor == sector.value
-            else None
-        )
-
         scan_int = max(0.4, args.delay * 0.7)
         hb_int = max(0.5, args.delay * 0.7)
 
-        # Crea la instancia del sensor con sus parámetros
+        # Crea la instancia del sensor con el modelo probabilístico de fallas y recuperaciones
         sensor = SensorNode(
             comm=comm,
             rank=rank,
@@ -123,7 +114,8 @@ def main() -> None:
             seed=args.seed,
             scan_interval=scan_int,
             heartbeat_interval=hb_int,
-            fail_at_cycle=fail_at_cycle,
+            failure_prob=args.failure_prob,
+            recovery_prob=args.recovery_prob,
         )
         try:
             # Inicia el bucle de escaneo del sensor

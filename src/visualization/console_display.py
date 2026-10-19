@@ -4,7 +4,7 @@ Genera paneles visuales para la matriz de 3x3, estado de salud de sensores y dec
 facilitando la grabación de la demostración para evaluación.
 """
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 import numpy as np
 from rich.console import Console
 from rich.panel import Panel
@@ -28,7 +28,8 @@ class ConsoleDisplay:
         decision: EvasionDecision,
         sensor_status: Dict[Sector, bool],
         cycle_number: int,
-        coverage_assignment: Optional[Dict[Sector, Sector]] = None,
+        coverage_assignment: Optional[Dict[Sector, Optional[Sector]]] = None,
+        recently_recovered: Optional[List[Sector]] = None,
     ) -> None:
         """Imprime un tablero completo con la cuadrícula de amenazas y el estado del sistema."""
         # Crea la tabla de 3 columnas para la matriz de radar
@@ -89,14 +90,20 @@ class ConsoleDisplay:
             DecisionType.RED_ALERT: "bold red",
         }[decision.decision]
 
-        # Identifica si hay sensores caídos y sectores reasignados a vecinos
+        # Identifica si hay sensores caídos, reasignados o recuperados
         reallocations = []
+        if recently_recovered:
+            for rec in recently_recovered:
+                reallocations.append(f"sector {rec.value} RECUPERADO (retomó control y restableció enlace)")
+
         if coverage_assignment:
             for sector, active in sensor_status.items():
                 if not active:
                     covering = coverage_assignment.get(sector)
                     if covering and covering != sector:
                         reallocations.append(f"sector {sector.value} inactivo (cubierto por {covering.value})")
+                    elif covering is None:
+                        reallocations.append(f"sector {sector.value} inactivo (ZONA CIEGA)")
 
         # Prepara el texto del informe con lenguaje simple y directo
         decision_text = Text()
