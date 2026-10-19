@@ -60,11 +60,11 @@ def main() -> None:
     args = parse_arguments()
 
     # Verificación de seguridad: el sistema requiere exactamente 9 procesos (1 nave + 8 sensores)
-    if size < TOTAL_PROCESSES:
-        # Solo el proceso 0 imprime el mensaje de error para evitar que salgan 8 mensajes repetidos
+    if size != TOTAL_PROCESSES:
+        # Solo el proceso 0 imprime el mensaje de error para evitar que salgan mensajes repetidos
         if rank == 0:
             print(
-                f"Error: se requieren {TOTAL_PROCESSES} procesos mpi (1 servidor central + 8 sensores). "
+                f"Error: se requieren exactamente {TOTAL_PROCESSES} procesos mpi (1 servidor central + 8 sensores). "
                 f"Procesos actuales: {size}.\n"
                 f"Ejecución recomendada: mpirun -n 9 --oversubscribe .venv/bin/python main.py",
                 file=sys.stderr,
