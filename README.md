@@ -244,7 +244,7 @@ Ejecuta el siguiente comando directamente con el intérprete del entorno virtual
 
 ## Fundamentos teóricos
 
-El diseño de este sistema distribuido toma como base los conceptos expuestos en las clases teóricas y en los libros de referencia disponibles en la carpeta `docs/`:
+El diseño de este sistema distribuido toma como base los conceptos expuestos en las clases teóricas y en los libros de referencia:
 
 1. **Comunicación asíncrona y prevención de bloqueos mutuos (*deadlocks*)**:
    - En sistemas distribuidos con topología en estrella, si el servidor central utilizara recepciones bloqueantes rígidas (`MPI_Recv`), un desfase temporal o la caída de un sensor causaría un abrazo mortal. Por ello se implementó sondeo no bloqueante mediante `MPI.Comm.Iprobe`, garantizando que la nave procese todos los mensajes disponibles de cualquier sensor sin detener su ciclo de decisión.
