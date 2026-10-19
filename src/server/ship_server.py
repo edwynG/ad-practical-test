@@ -12,7 +12,7 @@ from src.common.constants import (
     MessageTag,
     SECTOR_TO_RANK,
 )
-from src.common.protocol import HeartbeatMessage, ThreatEvent
+from src.common.protocol import HeartbeatMessage, ReconfigMessage, ThreatEvent
 from src.server.evasion_logic import EvasionEvaluator
 from src.server.failure_detector import FailureDetector
 from src.server.threat_matrix import ThreatMatrix
@@ -84,7 +84,22 @@ class ShipServer:
                 failed_sectors = self.failure_detector.check_failures()
                 for failed in failed_sectors:
                     # Busca qué sensor vecino activo puede asumir la vigilancia de ese sector
-                    _ = self.failure_detector.get_covering_sensor(failed)
+                    covering = self.failure_detector.get_covering_sensor(failed)
+                    if covering:
+                        covering_rank = SECTOR_TO_RANK[covering]
+                        # Obtiene todos los sectores asignados ahora a este sensor vecino
+                        assigned = tuple(
+                            s for s, cov in self.failure_detector.coverage_assignment.items()
+                            if cov == covering
+                        )
+                        reconfig = ReconfigMessage.create(
+                            target_rank=covering_rank,
+                            assigned_sectors=assigned,
+                        )
+                        try:
+                            self.comm.send(reconfig, dest=covering_rank, tag=MessageTag.RECONFIGURE)
+                        except Exception:
+                            pass
 
                 # 3. Leer el estado actual de la matriz 3x3 y evaluar si hay colisión o tránsito seguro
                 current_grid = self.threat_matrix.grid
@@ -97,6 +112,7 @@ class ShipServer:
                         decision=decision,
                         sensor_status=self.failure_detector.active_status,
                         cycle_number=self.cycle_count,
+                        coverage_assignment=self.failure_detector.coverage_assignment,
                     )
 
                 # Si se alcanzó el número máximo de ciclos solicitado, salimos del bucle

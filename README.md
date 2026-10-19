@@ -117,12 +117,17 @@ El archivo `main.py` acepta parámetros para ajustar el comportamiento de la sim
 | `--cycles` | `8` | Número de ciclos de escaneo que realizará la nave antes de apagarse (usar `0` para ejecución continua). |
 | `--delay` | `1.0` | Tiempo de pausa en segundos entre cada evaluación de ciclo en la nave central. |
 | `--seed` | `42` | Semilla inicial para el generador pseudoaleatorio determinista (PRNG). |
+| `--fail-sensor` | `None` | Simula la caída de un sensor específico para evaluar tolerancia a fallas (`NO`, `N`, `NE`, `O`, `E`, `SO`, `S`, `SE`). |
+| `--fail-at` | `3` | Ciclo en el que ocurrirá la desconexión del sensor indicado. |
 
 Ejemplos de ejecución personalizada:
 
 ```bash
 # Ejecutar 12 ciclos con una pausa de 0.8 segundos entre actualizaciones
 mpirun -n 9 --oversubscribe .venv/bin/python main.py --cycles 12 --delay 0.8
+
+# Probar tolerancia a fallas: simular la caída del sensor Sur (S) en el ciclo 3
+mpirun -n 9 --oversubscribe .venv/bin/python main.py --fail-sensor S --fail-at 3 --cycles 6
 
 # Ejecutar con una semilla pseudoaleatoria específica para reproducir un escenario
 mpirun -n 9 --oversubscribe .venv/bin/python main.py --cycles 10 --seed 98765

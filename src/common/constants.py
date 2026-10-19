@@ -85,4 +85,5 @@ class MessageTag(IntEnum):
     DETECTION = 100    # Indica que el mensaje contiene una lectura de radar (objeto detectado o no)
     HEARTBEAT = 200    # Indica que el mensaje es un latido periódico para avisar que el sensor está vivo
     RECONFIG = 300     # Indica que la nave solicita a un sensor cubrir el sector de un vecino caído
+    RECONFIGURE = 300  # Alias de RECONFIG para compatibilidad semántica
     TERMINATE = 999    # Orden de apagado enviada por la nave a los sensores al finalizar la simulación

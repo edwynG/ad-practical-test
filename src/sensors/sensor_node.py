@@ -10,7 +10,7 @@ from mpi4py import MPI
 
 from src.common.constants import MessageTag, SERVER_RANK, Sector
 from src.common.prng import SharedSeedPRNG
-from src.common.protocol import HeartbeatMessage, ThreatEvent
+from src.common.protocol import HeartbeatMessage, ReconfigMessage, ThreatEvent
 
 
 class SensorNode:
@@ -24,6 +24,7 @@ class SensorNode:
         seed: int = 42,
         scan_interval: float = 0.8,
         heartbeat_interval: float = 2.0,
+        fail_at_cycle: Optional[int] = None,
     ) -> None:
         """Configura los parámetros iniciales de conexión y escaneo del sensor."""
         self.comm = comm                          # Canal de comunicación mpi
@@ -31,6 +32,7 @@ class SensorNode:
         self.sector = sector                      # Nombre del sector asignado (ejemplo: N, SO, etc.)
         self.scan_interval = scan_interval        # Segundos de espera entre cada lectura de radar
         self.heartbeat_interval = heartbeat_interval  # Segundos de espera entre cada latido de vida
+        self.fail_at_cycle = fail_at_cycle        # Ciclo a partir del cual el sensor simulará su caída
 
         # Crea el generador determinista personalizando la semilla con el rango del nodo
         # De este modo cada sensor tiene su propia secuencia única y reproducible
@@ -47,8 +49,9 @@ class SensorNode:
         # Envía el objeto por mpi con la etiqueta de latido
         self.comm.send(heartbeat, dest=SERVER_RANK, tag=MessageTag.HEARTBEAT)
 
-    def scan_environment(self) -> ThreatEvent:
+    def scan_environment(self, sector: Optional[Sector] = None) -> ThreatEvent:
         """Simula una lectura de radar para saber si hay o no un objeto en el sector."""
+        target_sector = sector if sector is not None else self.sector
         self.sequence_id += 1
         self.step_id += 1
 
@@ -69,7 +72,7 @@ class SensorNode:
         # Construye el evento con la información del radar
         return ThreatEvent.create(
             sequence_id=self.sequence_id,
-            sector=self.sector,
+            sector=target_sector,
             rank=self.rank,
             detected=detected,
             step_id=self.step_id,
@@ -83,26 +86,40 @@ class SensorNode:
         cycles = 0
 
         while self.running:
-            # Revisa de forma no bloqueante (Iprobe) si la nave le envió una orden de apagado
-            # Iprobe no frena la ejecución del programa si el buzón está vacío
+            # 1. Revisa de forma no bloqueante si la nave envió una orden de apagado general
             if self.comm.Iprobe(source=SERVER_RANK, tag=MessageTag.TERMINATE):
                 _ = self.comm.recv(source=SERVER_RANK, tag=MessageTag.TERMINATE)
                 self.running = False
                 break
 
+            # 2. Si este sensor está programado para fallar y alcanzó el ciclo indicado
+            if self.fail_at_cycle is not None and cycles >= self.fail_at_cycle:
+                # El sensor simula una falla guardando silencio: no emite latidos ni lecturas.
+                # Permanece en espera no bloqueante hasta que la nave ordene la terminación.
+                time.sleep(0.3)
+                continue
+
+            # 3. Revisa si la nave le asignó sectores adicionales por tolerancia a fallas
+            if self.comm.Iprobe(source=SERVER_RANK, tag=MessageTag.RECONFIGURE):
+                reconfig_msg: ReconfigMessage = self.comm.recv(
+                    source=SERVER_RANK, tag=MessageTag.RECONFIGURE
+                )
+                self.covered_sectors = list(reconfig_msg.assigned_sectors)
+
             now = time.time()
 
-            # Si ya pasó el tiempo estipulado, envía un latido a la nave
+            # 4. Si ya pasó el tiempo estipulado, envía un latido a la nave
             if now - last_heartbeat >= self.heartbeat_interval:
                 self.send_heartbeat()
                 last_heartbeat = now
 
-            # Realiza la lectura del radar y le envía el resultado a la nave
-            event = self.scan_environment()
-            self.comm.send(event, dest=SERVER_RANK, tag=MessageTag.DETECTION)
+            # 5. Realiza la lectura del radar para cada sector bajo su vigilancia y envía los datos
+            for sec in self.covered_sectors:
+                event = self.scan_environment(sector=sec)
+                self.comm.send(event, dest=SERVER_RANK, tag=MessageTag.DETECTION)
 
             cycles += 1
-            # Si se configuró un número límite de ciclos y ya se alcanzó, finaliza el sensor
+            # 6. Si se configuró un número límite de ciclos y ya se alcanzó, finaliza el sensor
             if max_cycles is not None and cycles >= max_cycles:
                 break
 
