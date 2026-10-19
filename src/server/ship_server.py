@@ -60,7 +60,22 @@ class ShipServer:
             elif tag == MessageTag.HEARTBEAT:
                 heartbeat: HeartbeatMessage = self.comm.recv(source=source, tag=tag)
                 # Registra que el sensor sigue con vida
-                self.failure_detector.register_heartbeat(heartbeat)
+                released_substitute = self.failure_detector.register_heartbeat(heartbeat)
+                # Si el sensor revivió, notifica al antiguo sustituto para que libere la zona delegada
+                if released_substitute:
+                    sub_rank = SECTOR_TO_RANK[released_substitute]
+                    assigned = tuple(
+                        s for s, cov in self.failure_detector.coverage_assignment.items()
+                        if cov == released_substitute
+                    )
+                    reconfig = ReconfigMessage.create(
+                        target_rank=sub_rank,
+                        assigned_sectors=assigned,
+                    )
+                    try:
+                        self.comm.send(reconfig, dest=sub_rank, tag=MessageTag.RECONFIG)
+                    except Exception:
+                        pass
                 messages_processed += 1
 
             # Caso C: Cualquier otro mensaje que pudiera llegar
@@ -82,30 +97,43 @@ class ShipServer:
 
                 # 2. Revisar si algún sensor dejó de mandar latidos y se considera caído
                 failed_sectors = self.failure_detector.check_failures()
-                for failed in failed_sectors:
-                    # Busca qué sensor vecino activo puede asumir la vigilancia de ese sector
-                    covering = self.failure_detector.get_covering_sensor(failed)
-                    if covering:
-                        covering_rank = SECTOR_TO_RANK[covering]
-                        # Obtiene todos los sectores asignados ahora a este sensor vecino
+                if failed_sectors:
+                    # Asigna cobertura a los recién caídos y reasigna sectores huérfanos
+                    for failed in failed_sectors:
+                        _ = self.failure_detector.get_covering_sensor(failed)
+                    self.failure_detector.reassign_orphaned_sectors()
+
+                    # Envía las órdenes de reconfiguración a los sensores activos encargados
+                    covered_targets = set()
+                    for s, cov in self.failure_detector.coverage_assignment.items():
+                        if cov and self.failure_detector.active_status.get(cov, False):
+                            covered_targets.add(cov)
+
+                    for cov_sec in covered_targets:
+                        covering_rank = SECTOR_TO_RANK[cov_sec]
                         assigned = tuple(
-                            s for s, cov in self.failure_detector.coverage_assignment.items()
-                            if cov == covering
+                            s for s, c in self.failure_detector.coverage_assignment.items()
+                            if c == cov_sec
                         )
                         reconfig = ReconfigMessage.create(
                             target_rank=covering_rank,
                             assigned_sectors=assigned,
                         )
                         try:
-                            self.comm.send(reconfig, dest=covering_rank, tag=MessageTag.RECONFIGURE)
+                            self.comm.send(reconfig, dest=covering_rank, tag=MessageTag.RECONFIG)
                         except Exception:
                             pass
 
-                # 3. Leer el estado actual de la matriz 3x3 y evaluar si hay colisión o tránsito seguro
+                # 3. Limpiar datos estancados en sectores que quedaron como zonas ciegas reales
+                for sector, covering in self.failure_detector.coverage_assignment.items():
+                    if covering is None:
+                        self.threat_matrix.update_sector(sector, 0)
+
+                # 4. Leer el estado actual de la matriz 3x3 y evaluar si hay colisión o tránsito seguro
                 current_grid = self.threat_matrix.grid
                 decision = self.evaluator.evaluate(current_grid)
 
-                # 4. Mostrar en pantalla el tablero visual con colores
+                # 5. Mostrar en pantalla el tablero visual con colores
                 if self.display:
                     self.display.render_dashboard(
                         grid=current_grid,

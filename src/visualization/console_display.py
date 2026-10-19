@@ -44,6 +44,12 @@ class ConsoleDisplay:
             ["SO", "S", "SE"],
         ]
 
+        sector_map = [
+            [Sector.NO, Sector.N, Sector.NE],
+            [Sector.O, None, Sector.E],
+            [Sector.SO, Sector.S, Sector.SE],
+        ]
+
         # Recorre cada una de las 3 filas
         for r in range(3):
             row_cells = []
@@ -52,10 +58,19 @@ class ConsoleDisplay:
                 if r == 1 and c == 1:
                     row_cells.append("[bold white on blue] NAVE (x) [/]")
                 else:
+                    sec = sector_map[r][c]
                     val = grid[r, c]
                     lbl = labels[r][c]
-                    # Si el sensor tiene detección activa (1)
-                    if val == 1:
+                    # Si el sector es una zona ciega sin ningún sensor vigilándolo
+                    is_blind = (
+                        sec is not None
+                        and coverage_assignment is not None
+                        and coverage_assignment.get(sec) is None
+                        and not sensor_status.get(sec, True)
+                    )
+                    if is_blind:
+                        row_cells.append(f"[bold red on grey15] {lbl}: ? [/]")
+                    elif val == 1:
                         # Si es colisión se pinta en rojo brillante, si es tránsito seguro en verde
                         if decision.decision == DecisionType.RED_ALERT:
                             style = "bold white on red"
