@@ -31,10 +31,10 @@ class ConsoleDisplay:
     ) -> None:
         """Imprime un tablero completo con la cuadrícula de amenazas y el estado del sistema."""
         # Crea la tabla de 3 columnas para la matriz de radar
-        matrix_table = Table(title="Matriz de amenazas (3 x 3)", show_header=True, header_style="bold cyan")
-        matrix_table.add_column("Oeste / Noroeste", justify="center")
-        matrix_table.add_column("Centro / Norte-Sur", justify="center")
-        matrix_table.add_column("Este / Sureste", justify="center")
+        matrix_table = Table(title="Radar espacial (3 x 3)", show_header=True, header_style="bold cyan")
+        matrix_table.add_column("Oeste", justify="center")
+        matrix_table.add_column("Centro", justify="center")
+        matrix_table.add_column("Este", justify="center")
 
         # Nombres de los sectores según su posición en la matriz
         labels = [
@@ -73,12 +73,12 @@ class ConsoleDisplay:
             DecisionType.RED_ALERT: "bold red",
         }[decision.decision]
 
-        # Prepara el texto del informe del centro de mando
+        # Prepara el texto del informe con lenguaje simple y directo
         decision_text = Text()
-        decision_text.append(f"Ciclo de escaneo: {cycle_number}\n", style="bold")
-        decision_text.append(f"Estado clasificado: {decision.decision.value}\n", style=decision_color)
-        decision_text.append(f"Diagnóstico: {decision.explanation}\n", style="italic")
-        decision_text.append(f"Acción del centro de mando: {decision.action_taken}", style="bold yellow")
+        decision_text.append(f"Paso de escaneo: {cycle_number}\n", style="bold")
+        decision_text.append(f"Situación: {decision.decision.value}\n", style=decision_color)
+        decision_text.append(f"Detalle: {decision.explanation}\n", style="italic")
+        decision_text.append(f"Acción: {decision.action_taken}", style="bold yellow")
 
         # Construye la barra de estado de vida de los 8 sensores
         sensors_text = Text()
@@ -89,6 +89,6 @@ class ConsoleDisplay:
 
         # Imprime separador y los 3 paneles en la terminal
         self.console.print("\n" + "=" * 65)
-        self.console.print(Panel(matrix_table, title="Sistema Aegis-Star: radar en estrella", border_style="cyan"))
-        self.console.print(Panel(decision_text, title="Decisión del servidor central", border_style=decision_color))
-        self.console.print(Panel(sensors_text, title="Estado de sensores periféricos (latidos)", border_style="blue"))
+        self.console.print(Panel(matrix_table, title="Radar de la nave", border_style="cyan"))
+        self.console.print(Panel(decision_text, title="Decisión de la nave", border_style=decision_color))
+        self.console.print(Panel(sensors_text, title="Estado de los sensores (en línea)", border_style="blue"))
