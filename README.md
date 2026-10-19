@@ -12,11 +12,11 @@ Este proyecto implementa un sistema distribuido tolerante a fallas bajo una topo
 2. **Paso de mensajes no bloqueante**: Uso de sondeos no bloqueantes (`MPI.Comm.Iprobe`) para recolectar detecciones y latidos sin condiciones de carrera ni bloqueos mutuos (*deadlocks*).
 3. **Matriz de amenazas 3 × 3**: Cuadrícula espacial binaria donde `0` indica espacio despejado y `1` detección activa de meteorito o basura espacial.
 4. **Reglas de clasificación estricta**:
-   - **Único 1 aislado**: Alerta roja por colisión inminente (trayectoria lineal convergente hacia la nave).
-   - **Dos o más 1 consecutivos y adyacentes**: Tránsito seguro (trayectoria paralela o tangente que roza los sensores sin colisionar).
-   - **Matriz en ceros**: Espacio despejado sin riesgos.
-5. **Generador pseudoaleatorio determinista (PRNG con semilla compartida)**: Algoritmo congruencial lineal que garantiza repetibilidad en simulaciones y pruebas distribuidas.
-6. **Tolerancia a fallas por latidos de vida (heartbeats)**: Detección automática de desconexiones y reasignación dinámica de sectores de radar hacia sensores vecinos activos.
+   - **Único 1 aislado**: Peligro de choque / colisión inminente (trayectoria convergente hacia la nave). Se resalta individualmente en **rojo**.
+   - **Dos o más 1 consecutivos y adyacentes**: Paso seguro (trayectoria paralela o tangente que roza los sensores sin colisionar). Se resaltan individualmente en **verde**.
+   - **Matriz en ceros**: Sin peligro (espacio despejado).
+5. **Generador pseudoaleatorio determinista (PRNG con semilla compartida)**: Algoritmo congruencial lineal que garantiza repetibilidad en simulaciones y pruebas distribuidas (semilla predeterminada `30326271`).
+6. **Tolerancia a fallas estocástica y latidos de vida (heartbeats)**: Detección automática de desconexiones por temporizador (*timeout*) en la nave, simulación estocástica de fallas en sensores, reasignación dinámica a vecinos inmediatos en el anillo, detección de zonas ciegas (`?`) y restitución completa de enlace al revivir un sensor.
 
 > [!NOTE]
 > Este proyecto modela una topología pura en estrella donde los 8 sensores no se comunican directamente entre sí, sino exclusivamente con el servidor central mediante el paso de mensajes en MPI.
@@ -67,7 +67,7 @@ sudo apt install -y python3 python3-venv python3-pip openmpi-bin libopenmpi-dev
 
 1. Abre una terminal y sitúate en la carpeta raíz del proyecto:
    ```bash
-   cd ad-practical-test
+   cd parcial
    ```
 
 2. Crea el entorno virtual de Python llamado `.venv`:
@@ -116,7 +116,7 @@ El archivo `main.py` acepta parámetros para ajustar el comportamiento de la sim
 | :--- | :---: | :--- |
 | `--cycles` | `8` | Número de ciclos de escaneo que realizará la nave antes de apagarse (usar `0` para ejecución continua). |
 | `--delay` | `1.0` | Tiempo de pausa en segundos entre cada evaluación de ciclo en la nave central. |
-| `--seed` | `42` | Semilla inicial para el generador pseudoaleatorio determinista (PRNG). |
+| `--seed` | `30326271` | Semilla inicial para el generador pseudoaleatorio determinista (PRNG). |
 | `--failure-prob` | `0.05` | Probabilidad de fallo transitorio por ciclo en cada sensor (modelo probabilístico). |
 | `--recovery-prob` | `0.40` | Probabilidad de recuperación de un sensor caído tras cumplir el período mínimo. |
 
@@ -191,37 +191,39 @@ El evaluador de evasión (`src/server/evasion_logic.py`) analiza el grafo perime
 
 $$\text{Anillo perimetral} = [\text{NO}, \text{N}, \text{NE}, \text{E}, \text{SE}, \text{S}, \text{SO}, \text{O}]$$
 
-Las decisiones se clasifican estrictamente según las reglas del documento oficial:
+Las decisiones se clasifican según las reglas del documento oficial y se muestran con lenguaje directo:
 
-1. **Sin amenazas (`SIN_AMENAZAS`)**:
+1. **Sin peligro (`DecisionType.NO_THREAT` / "Sin peligro")**:
    - Cantidad de detecciones activas igual a cero.
    - Acción: mantener curso normal y velocidad de crucero.
 
-2. **Alerta roja de colisión inminente (`ALERTA_ROJA_COLISION`)**:
-   - Se detecta un **único 1 aislado** en cualquier sector de entrada (o bien detecciones simultáneas pero no consecutivas).
+2. **Peligro de choque (`DecisionType.RED_ALERT` / "Peligro de choque")**:
+   - Se detecta al menos un **1 aislado** en cualquier sector de entrada.
    - Significado físico: el meteorito avanza en una trayectoria estrictamente lineal y directa hacia el centro de la nave.
    - Acción: activar escudos reflectores y encender propulsores de maniobra evasiva inmediata.
+   - Visualización: la celda del sensor aislado se resalta individualmente en **rojo** (`[bold white on red]`).
 
-3. **Tránsito seguro (`TRANSITO_SEGURO`)**:
-   - Se detectan **dos o más valores 1 consecutivos y adyacentes** a lo largo del anillo perimetral (por ejemplo: `NE` y `E`, o `O` y `NO`).
+3. **Paso seguro (`DecisionType.SAFE_TRANSIT` / "Paso seguro")**:
+   - Se detectan **dos o más valores 1 consecutivos y adyacentes** a lo largo del anillo perimetral (por ejemplo: `NE` y `E`, o `O` y `NO`) y ningún sector aislado.
    - Significado físico: el objeto se desplaza de manera paralela o tangente cruzando los sensores de lado sin rumbo de interceptación hacia el centro.
    - Acción: registrar el paso seguro del objeto sin alterar los propulsores.
+   - Visualización: las celdas adyacentes se resaltan individualmente en **verde** (`[bold black on green]`).
 
-> [!IMPORTANT]
-> Un único 1 aislado en cualquier sector activa inmediatamente la alerta roja por colisión. La condición de tránsito seguro solo se cumple cuando dos o más valores 1 son estrictamente adyacentes a lo largo del perímetro y no coexisten con amenazas aisladas simultáneas.
+> [!NOTE]
+> Cuando en un mismo ciclo coexisten sectores adyacentes seguros y un sector aislado peligroso, la nave prioriza la alerta de colisión por seguridad general, pero la cuadrícula 3×3 colorea individualmente cada celda: en **verde** las que van de paso lateral seguro y en **rojo** la que se dirige en rumbo de colisión hacia el centro.
 
 ---
 
 ## Casos de ejemplo evaluados según el documento oficial
 
-| Caso | Sectores con 1 | Matriz resultante | Clasificación esperada | Motivo físico |
+| Caso | Sectores con 1 | Matriz resultante | Situación reportada | Motivo físico |
 | :---: | :---: | :---: | :---: | :--- |
-| **Estado 1** | Ninguno | `[[0,0,0],[0,x,0],[0,0,0]]` | `SIN_AMENAZAS` | Espacio despejado. |
-| **Estado 2** | `N` | `[[0,1,0],[0,x,0],[0,0,0]]` | `ALERTA_ROJA_COLISION` | Único 1 aislado que apunta al centro desde el Norte. |
-| **Estado 3** | `NE`, `E` | `[[0,0,1],[0,x,1],[0,0,0]]` | `TRANSITO_SEGURO` | Dos 1s consecutivos en la columna Este (trayectoria paralela). |
-| **Estado 4** | `O` | `[[0,0,0],[1,x,0],[0,0,0]]` | `ALERTA_ROJA_COLISION` | Único 1 aislado que apunta al centro desde el Oeste. |
-| **Estado 5** | `NO` | `[[1,0,0],[0,x,0],[0,0,0]]` | `ALERTA_ROJA_COLISION` | Único 1 aislado en la diagonal superior izquierda. |
-| **Caso límite** | `O`, `NO` | `[[1,0,0],[1,x,0],[0,0,0]]` | `TRANSITO_SEGURO` | Adyacencia perimetral envolvente entre el sector 7 y el sector 0. |
+| **Estado 1** | Ninguno | `[[0,0,0],[0,x,0],[0,0,0]]` | `Sin peligro` | Espacio despejado. |
+| **Estado 2** | `N` | `[[0,1,0],[0,x,0],[0,0,0]]` | `Peligro de choque` | Único 1 aislado que apunta al centro desde el Norte (celda roja). |
+| **Estado 3** | `NE`, `E` | `[[0,0,1],[0,x,1],[0,0,0]]` | `Paso seguro` | Dos 1s consecutivos en la columna Este (celdas verdes, paso lateral). |
+| **Estado 4** | `O` | `[[0,0,0],[1,x,0],[0,0,0]]` | `Peligro de choque` | Único 1 aislado que apunta al centro desde el Oeste (celda roja). |
+| **Estado 5** | `NO` | `[[1,0,0],[0,x,0],[0,0,0]]` | `Peligro de choque` | Único 1 aislado en la diagonal superior izquierda (celda roja). |
+| **Caso límite** | `O`, `NO` | `[[1,0,0],[1,x,0],[0,0,0]]` | `Paso seguro` | Adyacencia perimetral envolvente entre el sector 7 y el sector 0 (celdas verdes). |
 
 ---
 
@@ -244,7 +246,11 @@ Ejecuta el siguiente comando directamente con el intérprete del entorno virtual
 
 ¿Cómo opera pytest en este proyecto?
 
-1. **Descubrimiento automático**: Pytest inspecciona la carpeta `tests/` y busca automáticamente archivos que comiencen con el prefijo `test_` (como `test_evasion_logic.py`, `test_prng.py` y `test_protocol.py`).
+1. **Descubrimiento automático**: Pytest inspecciona la carpeta `tests/` y ejecuta los 4 archivos de prueba unitaria (19 pruebas en total):
+   - `test_evasion_logic.py`: Reglas de la matriz 3×3, casos de ejemplo y consecutividad perimetral.
+   - `test_failure_detector.py`: Detección por *timeout*, reasignación a vecinos, zonas ciegas y reactivación de nodos.
+   - `test_prng.py`: Determinismo y repetibilidad del generador con semilla compartida.
+   - `test_protocol.py`: Integridad y serialización de mensajes MPI.
 2. **Funciones de prueba**: Cada función dentro de estos archivos cuyo nombre inicie con `test_` es tratada como un caso de prueba independiente.
 3. **Uso de fixtures (`@pytest.fixture`)**: Son funciones utilitarias que preparan recursos u objetos de prueba de forma modular. Por ejemplo, en `test_evasion_logic.py` el fixture `evaluator` crea una instancia limpia de la clase `EvasionEvaluator` y la inyecta automáticamente en cada función que declare ese argumento.
 4. **Validación con aserciones (`assert`)**: Pytest utiliza la instrucción estándar de Python `assert condición`. Si la condición es verdadera, la prueba es marcada como aprobada (`PASSED`). Si es falsa, la prueba falla (`FAILED`) y pytest muestra en pantalla un reporte visual con la diferencia exacta entre el valor esperado y el obtenido.
@@ -252,7 +258,7 @@ Ejecuta el siguiente comando directamente con el intérprete del entorno virtual
 
 ---
 
-## Fundamentos teóricos y referencias del directorio docs
+## Fundamentos teóricos
 
 El diseño de este sistema distribuido toma como base los conceptos expuestos en las clases teóricas y en los libros de referencia disponibles en la carpeta `docs/`:
 
@@ -285,11 +291,13 @@ El funcionamiento dinámico del sistema distribuido se desarrolla a través de l
 
 4. **Actualización de la matriz y toma de decisiones**:
    - Con cada evento procesado, la cuadrícula 3 × 3 actualiza el valor del sector correspondiente.
-   - El evaluador de evasión analiza la configuración de valores en el anillo perimetral: si encuentra una detección aislada activa la alerta roja de colisión; si detecta dos o más 1s contiguos en el perímetro clasifica el evento como tránsito seguro.
+   - El evaluador de evasión analiza la configuración perimetral: colorea en **verde** las detecciones que formen grupos tangentes seguros y en **rojo** las detecciones aisladas en rumbo de colisión hacia la nave.
    - La interfaz en consola dibuja el estado en tiempo real con tablas y paneles a color facilitando el seguimiento visual de la simulación.
 
-5. **Supervisión de salud y reconfiguración dinámica**:
-   - El detector de fallas compara la hora actual con el último latido registrado de cada sensor. Si un nodo supera el tiempo de espera configurado, es marcado como desconectado y se asigna dinámicamente su sector al vecino activo más cercano.
+5. **Supervisión de salud, reconfiguración y zonas ciegas**:
+   - El detector de fallas compara la hora actual con el último latido registrado de cada sensor. Si un nodo supera el tiempo de espera configurado (`timeout_seconds`), es marcado como caído y se delega dinámicamente su sector al vecino perimetral activo más cercano.
+   - Si un sector pierde ambos vecinos directos, se clasifica como **zona ciega** (`?`) advirtiendo la falta de visibilidad.
+   - Al revivir un nodo caído mediante un nuevo latido, la nave le restituye su zona original, notifica al vecino sustituto mediante un mensaje `RECONFIG` para que libere la carga ("retomar el enlace") y reasigna sectores huérfanos que ahora puedan ser cubiertos.
 
 ---
 

@@ -39,7 +39,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--seed",
         type=int,
-        default=42,
+        default=30326271,
         help="Semilla compartida para el generador pseudoaleatorio determinista",
     )
     # Modelo probabilístico de fallas y recuperaciones 
