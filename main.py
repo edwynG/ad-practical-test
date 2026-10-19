@@ -21,12 +21,12 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Sistema de detección y evasión en estrella (Aegis-Star 8-Sector)"
     )
-    # Permite fijar cuántos ciclos durará la simulación (por defecto 8)
+    # Permite fijar cuántos ciclos durará la simulación (por defecto 0 para indefinido hasta Ctrl+C)
     parser.add_argument(
         "--cycles",
         type=int,
-        default=8,
-        help="Cantidad de ciclos a ejecutar antes de finalizar (por defecto 8, 0 para indefinido)",
+        default=0,
+        help="Cantidad de ciclos a ejecutar antes de finalizar (por defecto 0 para indefinido hasta Ctrl+C)",
     )
     # Permite ajustar el tiempo de espera entre ciclos en segundos
     parser.add_argument(

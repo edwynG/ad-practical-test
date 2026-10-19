@@ -106,7 +106,7 @@ El archivo `main.py` acepta parámetros para ajustar el comportamiento de la sim
 
 | Parámetro | Valor por defecto | Descripción |
 | :--- | :---: | :--- |
-| `--cycles` | `8` | Número de ciclos de escaneo que realizará la nave antes de apagarse (usar `0` para ejecución continua). |
+| `--cycles` | `0` | Número de ciclos de escaneo que realizará la nave antes de apagarse (por defecto `0` para ejecución continua indefinida hasta presionar Ctrl+C). |
 | `--delay` | `1.0` | Tiempo de pausa en segundos entre cada evaluación de ciclo en la nave central. |
 | `--seed` | `30326271` | Semilla inicial para el generador pseudoaleatorio determinista (PRNG). |
 | `--failure-prob` | `0.05` | Probabilidad de fallo transitorio por ciclo en cada sensor (modelo probabilístico). |
@@ -115,17 +115,17 @@ El archivo `main.py` acepta parámetros para ajustar el comportamiento de la sim
 Ejemplos de ejecución personalizada:
 
 ```bash
-# Ejecución estándar con modelo probabilístico de fallas y recuperaciones
+# Ejecución estándar continua indefinida (hasta presionar Ctrl+C)
+mpirun -n 9 --oversubscribe .venv/bin/python main.py
+
+# Ejecución acotada a una cantidad fija de ciclos (por ejemplo 12 ciclos)
 mpirun -n 9 --oversubscribe .venv/bin/python main.py --cycles 12 --delay 0.8
 
 # Ajustar mayor probabilidad de fallas para evaluar tolerancia en red inestable
-mpirun -n 9 --oversubscribe .venv/bin/python main.py --cycles 15 --failure-prob 0.12 --delay 0.6
+mpirun -n 9 --oversubscribe .venv/bin/python main.py --failure-prob 0.12 --delay 0.6
 
 # Ejecutar sin fallas simuladas (red 100% estable)
 mpirun -n 9 --oversubscribe .venv/bin/python main.py --cycles 10 --failure-prob 0.0
-
-# Ejecutar de forma indefinida hasta presionar Ctrl+C
-mpirun -n 9 --oversubscribe .venv/bin/python main.py --cycles 0 --delay 1.0
 ```
 
 ## Arquitectura y modelo de la matriz de amenazas (3 × 3)
