@@ -4,8 +4,6 @@ Proyecto desarrollado para la asignatura Algoritmos Distribuidos de la Escuela d
 
 Este proyecto implementa un sistema distribuido tolerante a fallas bajo una topología en estrella usando el estándar MPI a través de la biblioteca `mpi4py`. El sistema simula el centro de mando de una nave espacial (servidor central en el rango 0) rodeado por 8 nodos sensores periféricos de radar (rangos 1 al 8) que escanean sectores espaciales, reportan detecciones en tiempo real, construyen dinámicamente una matriz de amenazas de 3 × 3 y ejecutan maniobras evasivas o activación de escudos.
 
----
-
 ## Resumen ejecutivo del proyecto
 
 1. **Topología en estrella**: 1 servidor central ("La Nave", rango 0) y 8 radares periféricos (rangos 1 al 8).
@@ -20,8 +18,6 @@ Este proyecto implementa un sistema distribuido tolerante a fallas bajo una topo
 
 > [!NOTE]
 > Este proyecto modela una topología pura en estrella donde los 8 sensores no se comunican directamente entre sí, sino exclusivamente con el servidor central mediante el paso de mensajes en MPI.
-
----
 
 ## Estructura del proyecto
 
@@ -44,8 +40,6 @@ parcial/
 ├── main.py              # Punto de entrada de la simulación mpi
 └── README.md            # Documentación técnica y teórica del sistema
 ```
-
----
 
 ## Configuración del entorno virtual e instalación
 
@@ -93,8 +87,6 @@ sudo apt install -y python3 python3-venv python3-pip openmpi-bin libopenmpi-dev
 > [!TIP]
 > Si estás trabajando en Visual Studio Code o Cursor en WSL, selecciona el intérprete de Python ubicado en `.venv/bin/python` para que el editor reconozca automáticamente los módulos y el entorno de pruebas.
 
----
-
 ## Ejecución de la simulación distribuida
 
 Para poner en marcha el sistema distribuido con los 9 procesos requeridos (1 nave central + 8 sensores periféricos), se utiliza la herramienta `mpirun` de OpenMPI.
@@ -135,8 +127,6 @@ mpirun -n 9 --oversubscribe .venv/bin/python main.py --cycles 10 --failure-prob 
 # Ejecutar de forma indefinida hasta presionar Ctrl+C
 mpirun -n 9 --oversubscribe .venv/bin/python main.py --cycles 0 --delay 1.0
 ```
-
----
 
 ## Arquitectura y modelo de la matriz de amenazas (3 × 3)
 
@@ -212,8 +202,6 @@ Las decisiones se clasifican según las reglas del documento oficial y se muestr
 > [!NOTE]
 > Cuando en un mismo ciclo coexisten sectores adyacentes seguros y un sector aislado peligroso, la nave prioriza la alerta de colisión por seguridad general, pero la cuadrícula 3×3 colorea individualmente cada celda: en **verde** las que van de paso lateral seguro y en **rojo** la que se dirige en rumbo de colisión hacia el centro.
 
----
-
 ## Casos de ejemplo evaluados según el documento oficial
 
 | Caso | Sectores con 1 | Matriz resultante (3 × 3) | Situación reportada | Motivo físico |
@@ -224,8 +212,6 @@ Las decisiones se clasifican según las reglas del documento oficial y se muestr
 | **Estado 4** | `O` | <pre>[ 0  0  0 ]<br>[ 1  x  0 ]<br>[ 0  0  0 ]</pre> | `Peligro de choque` | Único 1 aislado que apunta al centro desde el Oeste (celda roja). |
 | **Estado 5** | `NO` | <pre>[ 1  0  0 ]<br>[ 0  x  0 ]<br>[ 0  0  0 ]</pre> | `Peligro de choque` | Único 1 aislado en la diagonal superior izquierda (celda roja). |
 | **Caso límite** | `O`, `NO` | <pre>[ 1  0  0 ]<br>[ 1  x  0 ]<br>[ 0  0  0 ]</pre> | `Paso seguro` | Adyacencia perimetral envolvente entre el sector 7 y el sector 0 (celdas verdes). |
-
----
 
 ## Pruebas automatizadas con pytest
 
@@ -255,8 +241,6 @@ Ejecuta el siguiente comando directamente con el intérprete del entorno virtual
 3. **Uso de fixtures (`@pytest.fixture`)**: Son funciones utilitarias que preparan recursos u objetos de prueba de forma modular. Por ejemplo, en `test_evasion_logic.py` el fixture `evaluator` crea una instancia limpia de la clase `EvasionEvaluator` y la inyecta automáticamente en cada función que declare ese argumento.
 4. **Validación con aserciones (`assert`)**: Pytest utiliza la instrucción estándar de Python `assert condición`. Si la condición es verdadera, la prueba es marcada como aprobada (`PASSED`). Si es falsa, la prueba falla (`FAILED`) y pytest muestra en pantalla un reporte visual con la diferencia exacta entre el valor esperado y el obtenido.
 5. **Aislamiento de fallas**: Si una prueba falla, las demás pruebas continúan ejecutándose, garantizando un informe completo del estado de todo el sistema.
-
----
 
 ## Fundamentos teóricos
 
@@ -298,8 +282,6 @@ El funcionamiento dinámico del sistema distribuido se desarrolla a través de l
    - El detector de fallas compara la hora actual con el último latido registrado de cada sensor. Si un nodo supera el tiempo de espera configurado (`timeout_seconds`), es marcado como caído y se delega dinámicamente su sector al vecino perimetral activo más cercano.
    - Si un sector pierde ambos vecinos directos, se clasifica como **zona ciega** (`?`) advirtiendo la falta de visibilidad.
    - Al revivir un nodo caído mediante un nuevo latido, la nave le restituye su zona original, notifica al vecino sustituto mediante un mensaje `RECONFIG` para que libere la carga ("retomar el enlace") y reasigna sectores huérfanos que ahora puedan ser cubiertos.
-
----
 
 ## Cumplimiento de la rúbrica de evaluación
 
