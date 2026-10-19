@@ -103,7 +103,9 @@ def main() -> None:
         # Averigua qué sector cardinal o intercardinal le corresponde
         sector = RANK_TO_SECTOR[rank]
 
+        # Intervalo de escaneo del radar para detectar asteroides (mínimo 0.4s)
         scan_int = max(0.4, args.delay * 0.7)
+        # Intervalo de latidos (heartbeat) para avisar a la nave que sigue activo (mínimo 0.5s)
         hb_int = max(0.5, args.delay * 0.7)
 
         # Crea la instancia del sensor con el modelo probabilístico de fallas y recuperaciones

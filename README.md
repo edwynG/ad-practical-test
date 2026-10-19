@@ -216,14 +216,14 @@ Las decisiones se clasifican según las reglas del documento oficial y se muestr
 
 ## Casos de ejemplo evaluados según el documento oficial
 
-| Caso | Sectores con 1 | Matriz resultante | Situación reportada | Motivo físico |
+| Caso | Sectores con 1 | Matriz resultante (3 × 3) | Situación reportada | Motivo físico |
 | :---: | :---: | :---: | :---: | :--- |
-| **Estado 1** | Ninguno | `[[0,0,0],[0,x,0],[0,0,0]]` | `Sin peligro` | Espacio despejado. |
-| **Estado 2** | `N` | `[[0,1,0],[0,x,0],[0,0,0]]` | `Peligro de choque` | Único 1 aislado que apunta al centro desde el Norte (celda roja). |
-| **Estado 3** | `NE`, `E` | `[[0,0,1],[0,x,1],[0,0,0]]` | `Paso seguro` | Dos 1s consecutivos en la columna Este (celdas verdes, paso lateral). |
-| **Estado 4** | `O` | `[[0,0,0],[1,x,0],[0,0,0]]` | `Peligro de choque` | Único 1 aislado que apunta al centro desde el Oeste (celda roja). |
-| **Estado 5** | `NO` | `[[1,0,0],[0,x,0],[0,0,0]]` | `Peligro de choque` | Único 1 aislado en la diagonal superior izquierda (celda roja). |
-| **Caso límite** | `O`, `NO` | `[[1,0,0],[1,x,0],[0,0,0]]` | `Paso seguro` | Adyacencia perimetral envolvente entre el sector 7 y el sector 0 (celdas verdes). |
+| **Estado 1** | Ninguno | <pre>[ 0  0  0 ]<br>[ 0  x  0 ]<br>[ 0  0  0 ]</pre> | `Sin peligro` | Espacio despejado. |
+| **Estado 2** | `N` | <pre>[ 0  1  0 ]<br>[ 0  x  0 ]<br>[ 0  0  0 ]</pre> | `Peligro de choque` | Único 1 aislado que apunta al centro desde el Norte (celda roja). |
+| **Estado 3** | `NE`, `E` | <pre>[ 0  0  1 ]<br>[ 0  x  1 ]<br>[ 0  0  0 ]</pre> | `Paso seguro` | Dos 1s consecutivos en la columna Este (celdas verdes, paso lateral). |
+| **Estado 4** | `O` | <pre>[ 0  0  0 ]<br>[ 1  x  0 ]<br>[ 0  0  0 ]</pre> | `Peligro de choque` | Único 1 aislado que apunta al centro desde el Oeste (celda roja). |
+| **Estado 5** | `NO` | <pre>[ 1  0  0 ]<br>[ 0  x  0 ]<br>[ 0  0  0 ]</pre> | `Peligro de choque` | Único 1 aislado en la diagonal superior izquierda (celda roja). |
+| **Caso límite** | `O`, `NO` | <pre>[ 1  0  0 ]<br>[ 1  x  0 ]<br>[ 0  0  0 ]</pre> | `Paso seguro` | Adyacencia perimetral envolvente entre el sector 7 y el sector 0 (celdas verdes). |
 
 ---
 
