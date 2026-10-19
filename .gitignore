@@ -30,3 +30,7 @@ logs/
 *.swp
 *.swo
 .DS_Store
+
+# Material de grabacion y presentacion (no subir a GitHub)
+presentation/
+
