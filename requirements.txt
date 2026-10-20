@@ -1,5 +1,10 @@
-# Dependencias principales para el sistema distribuido Aegis-Star
-mpi4py>=4.0.0
-numpy>=1.26.0
-rich>=13.7.0
-pytest>=8.0.0
+iniconfig==2.3.1
+markdown-it-py==4.2.0
+mdurl==0.1.2
+mpi4py==4.1.2
+numpy==2.5.4
+packaging==26.3
+pluggy==1.7.0
+Pygments==2.21.0
+pytest==9.1.1
+rich==15.0.0
