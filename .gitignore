@@ -13,6 +13,7 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+*.zip
 
 # Pruebas y linters
 .pytest_cache/
